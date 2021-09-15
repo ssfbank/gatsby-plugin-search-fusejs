@@ -1,0 +1,54 @@
+{
+  "name": "@ssfbank/gatsby-plugin-search-fusejs",
+  "version": "0.0.9-alpha.1",
+  "description": "Search for gatsby; implemented via fusejs.",
+  "main": "n/a",
+  "scripts": {
+    "build": "babel src --out-dir .",
+    "build:watch": "babel src --watch --out-dir .",
+    "default": "npm run build:watch",
+    "lint": "eslint ./src",
+    "format": "prettier-eslint --write '**/*.{js,md,json}'",
+    "prepublish": "npm run build",
+    "publish": "npm run lint && npm publish --access=public",
+    "test": "echo 'Error: no test specified' && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ssfbank/gatsby-plugin-search-fusejs.git"
+  },
+  "keywords": [
+    "gatsby",
+    "gatsby-plugin",
+    "fusejs",
+    "search"
+  ],
+  "author": "Asbjørn Lucassen <asbjorn.lucassen@ssf.no>",
+  "contributors": [
+    "Asbjørn Lucassen"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ssfbank/gatsby-plugin-search-fusejs/issues"
+  },
+  "homepage": "https://github.com/ssfbank/gatsby-plugin-search-fusejs#readme",
+  "devDependencies": {
+    "@babel/cli": "^7.15.4",
+    "@babel/core": "^7.15.5",
+    "@babel/plugin-proposal-object-rest-spread": "^7.15.6",
+    "@babel/preset-env": "^7.15.6",
+    "babel-eslint": "^10.1.0",
+    "eslint": "^7.32.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-react": "^7.25.1",
+    "prettier": "^2.4.0",
+    "prettier-eslint-cli": "^5.0.1"
+  },
+  "dependencies": {
+    "fuse.js": "^6.4.6"
+  },
+  "peerDependencies": {
+    "gatsby": ">3.13"
+  }
+}
