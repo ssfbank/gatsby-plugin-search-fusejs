@@ -207,7 +207,7 @@ exports.onPostBuild = (context, pluginOptions) => {
   }
   const fileName = join(
     'public',
-    basename(copySerializationToFile, 'json'),
+    basename(pluginOptions.copySerializationToFile, 'json'),
     'json'
   );
 
