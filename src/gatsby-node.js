@@ -1,15 +1,19 @@
-import { createHash } from "crypto"
-import { GraphQLScalarType } from "gatsby/graphql"
-import Fuse from "fuse.js"
+const crypto = require('crypto');
+const { GraphQLScalarType } = require('gatsby/graphql');
+const Fuse = require('fuse.js');
+const { writeFile } = require('fs/promises');
+const { extname, join, basename } = require('path');
 
-const SEARCH_INDEX_ID = `SearchIndex < Site`
-const SEARCH_INDEX_TYPE = `SiteSearchIndex`
-const parent = `___SOURCE___`
+const SEARCH_INDEX_ID = `SearchIndex < Site`;
+const SEARCH_INDEX_TYPE = `SiteSearchIndex`;
+const parent = `___SOURCE___`;
+const DEFAULT_NAMESPACE = '__defaultNamespace';
 
-const md5 = src =>
-  createHash(`md5`)
+const md5 = (src) =>
+  crypto
+    .createHash(`md5`)
     .update(src)
-    .digest(`hex`)
+    .digest(`hex`);
 
 const createEmptySearchIndexNode = () => {
   return {
@@ -17,12 +21,12 @@ const createEmptySearchIndexNode = () => {
     parent,
     children: [],
     pages: [],
-  }
-}
+  };
+};
 
 const appendPage = ({ pages }, newPage) => {
-  const newPages = [...pages, newPage]
-  const content = JSON.stringify(newPage)
+  const newPages = [...pages, newPage];
+  const content = JSON.stringify(newPage);
   return {
     id: SEARCH_INDEX_ID,
     parent,
@@ -33,8 +37,8 @@ const appendPage = ({ pages }, newPage) => {
       content: content,
       contentDigest: md5(content),
     },
-  }
-}
+  };
+};
 
 const createOrGetIndex = async (
   node,
@@ -43,96 +47,143 @@ const createOrGetIndex = async (
   getNodesByType,
   getNodes,
   server,
-  { fields, resolvers, fuseOptions }
+  reporter,
+  { resolvers, fuseOptions, useResolverNamespaces }
 ) => {
-  const cacheKey = `${node.id}:index`
-  const cached = await cache.get(cacheKey)
+  const cacheKey = `${node.id}:fuse`;
+  const cached = await cache.get(cacheKey);
   if (cached) {
-    return cached
+    return cached;
   }
 
-  const documents = []
+  if (!fuseOptions || !fuseOptions.keys || !fuseOptions.keys.length) {
+    reporter.error('Fusejs requires keys to be set in fuseOptions');
+  }
 
+  const createDoc = (_fieldResolvers, pageNode) => {
+    const doc = {
+      id: pageNode.id,
+      date: pageNode.date,
+      ...Object.keys(_fieldResolvers).reduce((prev, key) => {
+        return {
+          ...prev,
+          [key]: _fieldResolvers[key](
+            pageNode,
+            getNode,
+            getNodesByType,
+            getNodes
+          ),
+        };
+      }, {}),
+    };
+    return doc;
+  };
+
+  const documents = {};
   for (const pageId of node.pages) {
-    const pageNode = getNode(pageId)
-
-    const fieldResolvers = resolvers[pageNode.internal.type]
-    if (fieldResolvers) {
-      const doc = {
-        id: pageNode.id,
-        date: pageNode.date,
-        ...Object.keys(fieldResolvers).reduce((prev, key) => {
-          return {
-            ...prev,
-            [key]: fieldResolvers[key](
-              pageNode,
-              getNode,
-              getNodesByType,
-              getNodes
-            ),
+    const pageNode = getNode(pageId);
+    const typeResolver = resolvers[pageNode.internal.type];
+    if (useResolverNamespaces) {
+      Object.keys(typeResolver).forEach((namespace) => {
+        const fieldResolvers = typeResolver[namespace];
+        if (fieldResolvers) {
+          if (!documents[namespace]) {
+            documents[namespace] = [];
           }
-        }, {}),
-      }
 
-      documents.push(doc)
+          documents[namespace].push(createDoc(fieldResolvers, pageNode));
+        }
+      });
+    } else {
+      if (typeResolver) {
+        if (!documents[DEFAULT_NAMESPACE]) {
+          documents[DEFAULT_NAMESPACE] = [];
+        }
+
+        documents[DEFAULT_NAMESPACE].push(createDoc(typeResolver, pageNode));
+      }
     }
   }
+  let fuse = {};
+  if (useResolverNamespaces) {
+    Object.keys(documents).forEach((namespace) => {
+      const _index = Fuse.createIndex(
+        fuseOptions.keys,
+        documents[namespace],
+        fuseOptions
+      );
 
-  const index = Fuse.createIndex(fields, documents, fuseOptions)
-  const indexJSON = JSON.stringify(index)
+      fuse[namespace] = {
+        documents: documents[namespace],
+        index: _index,
+      };
+    });
+  } else {
+    const _index = Fuse.createIndex(
+      fuseOptions.keys,
+      documents[DEFAULT_NAMESPACE],
+      fuseOptions
+    );
 
-  await cache.set(cacheKey, indexJSON)
-  return indexJSON
-}
+    fuse = {
+      documents: documents[DEFAULT_NAMESPACE],
+      index: _index,
+    };
+  }
+
+  await cache.set(cacheKey, fuse);
+  return fuse;
+};
 
 const SearchIndex = new GraphQLScalarType({
-  name: `${SEARCH_INDEX_TYPE}_Index`,
-  description: `Serialized FUSEJS search index`,
+  name: `${SEARCH_INDEX_TYPE}_Fuse`,
+  description: `Serialized fusejs search index and documents`,
   parseValue() {
-    throw new Error(`Not supported`)
+    throw new Error(`Not supported`);
   },
   serialize(value) {
-    return value
+    return value;
   },
   parseLiteral() {
-    throw new Error(`Not supported`)
+    throw new Error(`Not supported`);
   },
-})
+});
 
 exports.sourceNodes = async ({ getNodes, actions }) => {
-  const { touchNode } = actions
+  const { touchNode } = actions;
 
   const existingNodes = getNodes().filter(
-    n => n.internal.owner === `@ssfbank/gatsby-plugin-search-fusej`
-  )
-  existingNodes.forEach(n => touchNode({ nodeId: n.id }))
-}
+    (n) => n.internal.owner === `@ssfbank/gatsby-plugin-search-fusejs`
+  );
+  existingNodes.forEach((n) => touchNode(n));
+};
 
 exports.onCreateNode = ({ node, actions, getNode }, { resolvers, filter }) => {
   if (Object.keys(resolvers).indexOf(node.internal.type) === -1) {
-    return
+    return;
   }
 
   if (filter && !filter(node, getNode)) {
-    return
+    return;
   }
 
-  const { createNode } = actions
-  const searchIndex = getNode(SEARCH_INDEX_ID) || createEmptySearchIndexNode()
-  const newSearchIndex = appendPage(searchIndex, node.id)
-  createNode(newSearchIndex)
-}
+  const { createNode } = actions;
+  const searchIndex = getNode(SEARCH_INDEX_ID) || createEmptySearchIndexNode();
+  const newSearchIndex = appendPage(searchIndex, node.id);
+
+  createNode(newSearchIndex);
+};
 
 exports.setFieldsOnGraphQLNodeType = (
-  { type, getNode, getNodesByType, getNodes, cache },
+  { type, getNode, getNodesByType, getNodes, cache, reporter },
   pluginOptions
 ) => {
   if (type.name !== SEARCH_INDEX_TYPE) {
-    return null
+    return null;
   }
 
   return {
-    index: {
+    fuse: {
       type: SearchIndex,
       resolve: (node, _opts, _3, server) =>
         createOrGetIndex(
@@ -142,8 +193,41 @@ exports.setFieldsOnGraphQLNodeType = (
           getNodesByType,
           getNodes,
           server,
+          reporter,
           pluginOptions
         ),
     },
+  };
+};
+
+exports.onPostBuild = (context, pluginOptions) => {
+  const { graphql, reporter } = context;
+  if (!pluginOptions.copySerializationToFile) {
+    return;
   }
-}
+  const fileName = join(
+    'public',
+    basename(copySerializationToFile, 'json'),
+    'json'
+  );
+
+  return graphql(
+    `
+      {
+        fuseSearchIndex: siteSearchIndex {
+          fuse
+        }
+      }
+    `
+  )
+    .then(({ data }) => {
+      const fuse = data.fuseSearchIndex;
+
+      const json = JSON.stringify(fuse);
+      reporter.info(`Writing fuse index and documents to file ${fileName}`);
+      return writeFile(fileName, json);
+    })
+    .catch((err) => {
+      reporter.error('Writing of elasticlunr index to file failed.', err);
+    });
+};

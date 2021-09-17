@@ -2,15 +2,15 @@
 
 This is a fork of [gatsby-plugin-elasticlunr-search](https://github.com/andrew-codes/gatsby-plugin-elasticlunr-search) made in order to use Fusejs in gatsby.
 
-elasticlunr is unmaintained, and fusejs is the most popular in this domain, so I decided to migrate from elasticlunr to fusejs. Thats why I decided to start from gatsby-plugin-elasticlunr-search, so it's API compatible.
+elasticlunr is unmaintained, and fusejs is the most popular in this domain, so I decided to migrate from elasticlunr to fusejs. Thats why I decided to start from gatsby-plugin-elasticlunr-search, so it's almost API compatible.
 
 There is another open source project here: https://www.npmjs.com/package/@draftbox-co/gatsby-plugin-fusejs, but that is removed from github and uninstallable through npm.
 
 This plugin enables search integration via fusejs. Content is indexed and then made available via graphql to rehydrate into a fusejs index. From there, queries can be made against this index to retrieve pages
 
-# Getting Started (TBD)
+# Getting Started
 
-Install the plugin via `npm install @ssfbank/gatsby-plugin-search-fusejs fusejs`.
+Install the plugin via `npm install @ssfbank/gatsby-plugin-search-fusejs fuse.js`.
 
 Next, update your `gatsby-config.js` file to utilize the plugin.
 
@@ -22,150 +22,228 @@ Next, update your `gatsby-config.js` file to utilize the plugin.
 module.exports = {
   plugins: [
     {
-      resolve: `@ssfbank/gatsby-plugin-search-fusej`,
+      resolve: `@ssfbank/gatsby-plugin-search-fusejs`,
       options: {
-        // Fields to index
-        fields: [`title`, `tags`],
         // How to resolve each field`s value for a supported node type
         resolvers: {
           // For any node of type MarkdownRemark, list how to resolve the fields` values
           MarkdownRemark: {
-            title: node => node.frontmatter.title,
-            tags: node => node.frontmatter.tags,
-            path: node => node.frontmatter.path,
+            title: (node) => node.frontmatter.title,
+            tags: (node) => node.frontmatter.tags,
+            path: (node) => node.frontmatter.path,
+          },
+          // Example showcasing the main use case of resolver namespacing, languages.
+          // Having this hierarchical namespace-level is controlled by useResolverNamespaces
+          SanityPage: {
+            en: {
+              title: (node) => node.frontmatter.title.en,
+              tags: (node) => node.frontmatter.tags,
+              path: (node) => node.frontmatter.path,
+            },
+            nn: {
+              title: (node) => node.frontmatter.title.nb,
+              tags: (node) => node.frontmatter.tags,
+              path: (node) => node.frontmatter.path,
+            },
+            // fr: {}, de: {}, jp: {} and so on. Watch out for exponential data growth with languages
           },
         },
         // pass on fuse specific constructor options: https://fusejs.io/api/options.html
         fuseOptions: {
-          isCaseSensitive: false,
+          keys: [`title`, `tags`], // Mandatory
+          ignoreLocation: true,
+          treshold: 0.4,
         },
+        // if you want a copy of the serialized data structure into the public folder for external or lazy-loaded clientside consumption
+        // will be put in ./public folder and will end up as ./public/fuse-search-data.json
+        copySerializationToFile: 'fuse-search-data',
+
+        // Allow separate namespaces unde reach resolver,
+        // which again leads to the same namespaces in the data
+        useResolverNamespaces: false,
         // Optional filter to limit indexed nodes
-        filter: (node, getNode) => node.frontmatter.tags !== "exempt",
+        filter: (node, getNode) => node.frontmatter.tags !== 'exempt',
       },
     },
   ],
-}
+};
 ```
 
 ## Consuming in Your Site
 
-The serialized search index will be available via graphql. Once queried, a component can create a new index with the value retrieved from the graphql query. Search queries can be made against the hydrated search index. The results is an array of document IDs. The index can return the full document given a document ID.
+The serialized search index will be available via graphql. Once queried, a component can construct a fuse instance using the documents and index. This instance can then be searched against. The results is a sorted array of the documents according to search scoring.
 
-In gatsby-v2, it is possible to use graphql queries inside components using [`StaticQuery`](https://www.gatsbyjs.org/docs/static-query/).
-
-Suppose that you want to include the `Search` component inside an `Header` component. _(Of course, you could also query `siteSearchIndex` from `layout.js` component, and pass it down as prop to any component that need it.)_
-
-First, query the data with `StaticQuery` inside the `Header` component, and pass it as props to the `Search` component.
-
-`components/header.js`
+Data structure of graphql data (or json in the case of `copySerializationToFile`
 
 ```javascript
-import React from "react"
-import { StaticQuery, graphql } from "gatsby"
-
-import Search from "./search"
-
-const Header = () => (
-  <StaticQuery
-    query={graphql`
-      query SearchIndexQuery {
-        siteSearchIndex {
-          index
-        }
+{
+  fuse: {
+    documents: [
+      {
+        title: 'About us',
+        tags: 'aboutus',
+        path: '/about'
+      },
+      {
+        title: 'Contact',
+        tags: 'contact',
+        path: '/contact'
       }
-    `}
-    render={data => (
-      <header>
-        ... header stuff...
-        <Search searchIndex={data.siteSearchIndex.index} />
-      </header>
-    )}
-  />
-)
-
-export default Header
+    ],
+    index: {} // fusejs serialization of Fuse.createIndex abbreviated
+  }
+}
 ```
 
-And then use the `searchIndex` inside your `Search` component.
-
-`components/search.js`
+Example data structure when you use resolver namespacing:
 
 ```javascript
-import React, { Component } from "react"
-import { Index } from "elasticlunr"
-import { Link } from "gatsby"
-
-// Search component
-export default class Search extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      query: ``,
-      results: [],
+{
+  fuse: {
+    en: {
+      documents: [
+        {
+          title: 'About us',
+          tags: 'aboutus',
+          path: '/about'
+        },
+        {
+          title: 'Contact',
+          tags: 'contact',
+          path: '/contact'
+        }
+      ],
+      index: {} // fusejs serialization of Fuse.createIndex abbreviated
+    },
+    nn: {
+      documents: [
+        {
+          title: 'Kven er vi',
+          tags: 'aboutus',
+          path: '/about'
+        },
+        {
+          title: 'Tyt og gnæg',
+          tags: 'contact',
+          path: '/contact'
+        }
+      ],
+      index: {} // fusejs serialization of Fuse.createIndex abbreviated
     }
   }
+}
+```
 
-  render() {
-    return (
+## React gatsby
+
+Below is an example with typescript and hooks react.
+
+It uses gatsby page query because that's what we use, but if you use the search in several pages, you should use useStaticQuery().
+
+Using `copySerializationToFile` it should also be able to make this lazy-loaded and chunked using clientside fetching. I have not tested this though.
+
+For simplicity I will only inlude an example using namespacing.
+If you do not use namespacing, just skip that level of the hierarchy.
+
+I left in how query parameter searching can be done.
+
+```typescript
+type State = {
+  query: string;
+  results: SearchResultDocument[];
+};
+
+type SanityData = {
+  fuseSearchIndex: {
+    fuse: {
+      nn: { index: any; documents: SearchResultDocument[] };
+      en: { index: any; documents: SearchResultDocument[] };
+    };
+  };
+};
+
+const Search = (props: PageProps<SanityData>) => {
+  const { data, location } = props;
+  const { fuseSearchIndex } = data;
+  const [language] = useLanguage(); // nn | en
+
+  const fuse = useMemo(() => {
+    const idx = Fuse.parseIndex<PageSearchIndex>(
+      fuseSearchIndex.fuse[language].index
+    );
+
+    return new Fuse<PageSearchIndex>(
+      fuseSearchIndex.fuse[language].documents,
+      {
+        keys: [
+          {
+            name: 'title',
+            weight: 3,
+          },
+          {
+            name: 'searchKeywords',
+            weight: 4,
+          },
+        ],
+        ignoreLocation: true,
+        threshold: 0.4,
+      },
+      idx
+    );
+  }, [fuseSearchIndex, language]);
+
+  const [searchState, setSearchState] = useState<State>({
+    query: '',
+    results: [],
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search.substring(1));
+    const paramQuery = params.get('q') || '';
+    if (paramQuery) {
+      const paramResults = fuse.search(paramQuery).map((i) => i.item);
+      setSearchState({
+        query: paramQuery,
+        results: paramResults,
+      });
+    }
+  }, [location, fuse]);
+
+  const { query, results } = searchState;
+
+  return (
+    <>
+      <input
+        name="searcher"
+        value={query}
+        placeholder={'Search....'}
+        onChange={(newQuery) => {
+          const newResults = fuse.search(newQuery).map((i) => i.item);
+
+          setSearchState({
+            query: newQuery,
+            results: newResults,
+          });
+        }}
+      />
       <div>
-        <input type="text" value={this.state.query} onChange={this.search} />
-        <ul>
-          {this.state.results.map(page => (
-            <li key={page.id}>
-              <Link to={"/" + page.path}>{page.title}</Link>
-              {": " + page.tags.join(`,`)}
-            </li>
-          ))}
-        </ul>
+      {
+        results.map(result => (<div>{result.title}</div>))
+      }
       </div>
-    )
+    </>
+  );
+};
+
+export default Sok;
+
+export const query = graphql`
+  {
+    fuseSearchIndex: siteSearchIndex {
+      fuse
+    }
   }
-  getOrCreateIndex = () =>
-    this.index
-      ? this.index
-      : // Create an elastic lunr index and hydrate with graphql query results
-        Index.load(this.props.searchIndex)
-
-  search = evt => {
-    const query = evt.target.value
-    this.index = this.getOrCreateIndex()
-    this.setState({
-      query,
-      // Query the index with search string to get an [] of IDs
-      results: this.index
-        .search(query, {})
-        // Map over each ID and return the full document
-        .map(({ ref }) => this.index.documentStore.getDoc(ref)),
-    })
-  }
-}
-```
-
-## Partial Searches
-
-If you want your search to include partial matches, for example if you had the following data:
-
-```javascript
-sku: ["ab21345", "ab98765", "abcdef12"]
-```
-
-And wanted a search for "**_ab_**" to return all of those data, then you can simply include `{ expand: true }` as the second parameter to `this.index.search()` when setting the `results` state.
-
-Taking the above example implementation, adapt the `search` function in the `Search` component to the following:
-
-```javascript
-search = evt => {
-  const query = evt.target.value
-  this.index = this.getOrCreateIndex()
-  this.setState({
-    query,
-    // Query the index with search string to get an [] of IDs
-    results: this.index
-      .search(query, { expand: true }) // Accept partial matches
-      // Map over each ID and return the full document
-      .map(({ ref }) => this.index.documentStore.getDoc(ref)),
-  })
-}
+`;
 ```
 
 ## Optimize handling of data models with nested nodes
