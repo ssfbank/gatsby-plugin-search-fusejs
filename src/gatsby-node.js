@@ -206,9 +206,8 @@ exports.onPostBuild = (context, pluginOptions) => {
     return;
   }
   const fileName = join(
-    'public',
-    basename(pluginOptions.copySerializationToFile, 'json'),
-    'json'
+    '/public',
+    `${basename(pluginOptions.copySerializationToFile, 'json')}.json`
   );
 
   return graphql(
