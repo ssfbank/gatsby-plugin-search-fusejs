@@ -1,6 +1,6 @@
 {
   "name": "@ssfbank/gatsby-plugin-search-fusejs",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "Search for gatsby; implemented via fusejs.",
   "main": "n/a",
   "scripts": {

@@ -200,17 +200,17 @@ exports.setFieldsOnGraphQLNodeType = (
   };
 };
 
-exports.onPostBuild = (context, pluginOptions) => {
+exports.onPostBuild = async (context, pluginOptions) => {
   const { graphql, reporter } = context;
   if (!pluginOptions.copySerializationToFile) {
     return;
   }
   const fileName = join(
-    '/public',
+    'public',
     `${basename(pluginOptions.copySerializationToFile, 'json')}.json`
   );
 
-  return graphql(
+  return await graphql(
     `
       {
         fuseSearchIndex: siteSearchIndex {
@@ -223,7 +223,8 @@ exports.onPostBuild = (context, pluginOptions) => {
       const fuse = data.fuseSearchIndex;
 
       const json = JSON.stringify(fuse);
-      reporter.info(`Writing fuse index and documents to file ${fileName}`);
+
+      reporter.info(`Writing fuse index and documents to file ${fileName}...`);
       return writeFile(fileName, json);
     })
     .catch((err) => {
