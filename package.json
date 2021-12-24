@@ -2,7 +2,6 @@
   "name": "@ssfbank/gatsby-plugin-search-fusejs",
   "version": "1.0.5",
   "description": "Search for gatsby; implemented via fusejs.",
-  "main": "n/a",
   "scripts": {
     "build": "babel src --out-dir .",
     "build:watch": "babel src --watch --out-dir .",
