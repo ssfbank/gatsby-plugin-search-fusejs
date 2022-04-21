@@ -6,7 +6,7 @@
 
 <h5 style="color: red">Work on this repository is discontinued. The approach of using the GraphQL types in onCreateNode is a poor fit with caching and with gatsby develop/gatsby build. It is recommended to instead just create the Fuse object client-side(or dumping the fuse index to a file).
 
-The repo will remain for a short while until it will be archived. Forking is recommended.</h5>
+The repo will remain for a short while until it will be archived. </h5>
 
 ---
 
