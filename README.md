@@ -1,5 +1,15 @@
 # FUSEJS Search Plugin for Gatsby
 
+---
+
+<h2 style="color: red">☠ Notice of deprecation ☠</h2>
+
+<h5 style="color: red">Work on this repository is discontinued. The approach of using the GraphQL types in onCreateNode is a poor fit with caching and with gatsby develop/gatsby build. It is recommended to instead just create the Fuse object client-side(or dumping the fuse index to a file).
+
+The repo will remain for a short while until it will be archived. Forking is recommended.</h5>
+
+---
+
 This is a fork of [gatsby-plugin-elasticlunr-search](https://github.com/andrew-codes/gatsby-plugin-elasticlunr-search) made in order to use Fusejs in gatsby.
 
 elasticlunr is unmaintained, and fusejs is the most popular in this domain, so I decided to migrate from elasticlunr to fusejs. Thats why I decided to start from gatsby-plugin-elasticlunr-search, so it's almost API compatible.
@@ -227,9 +237,9 @@ const Search = (props: PageProps<SanityData>) => {
         }}
       />
       <div>
-      {
-        results.map(result => (<div>{result.title}</div>))
-      }
+        {results.map((result) => (
+          <div>{result.title}</div>
+        ))}
       </div>
     </>
   );
